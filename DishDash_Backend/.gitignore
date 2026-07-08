@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+node_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# dotenv environment variable files
+.env
+.env.*
+!.env.example
+
+# Build output
+dist
+
+# IDE
+.vscode
+.idea
+
+# Upload folders
+backend/uploads/
+backend/uploads/profiles/
+uploads/
+uploads/profiles/

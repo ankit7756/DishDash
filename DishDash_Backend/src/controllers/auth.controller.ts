@@ -86,76 +86,10 @@ export const getProfile = async (req: Request, res: Response) => {
     }
 };
 
-// export const updateProfile = async (req: Request, res: Response) => {
-//     try {
-//         const userId = req.params.id;
-//         const loggedInUserId = (req as any).userId;
-
-//         if (userId !== loggedInUserId) {
-//             return res.status(403).json({
-//                 success: false,
-//                 message: "You can only update your own profile"
-//             });
-//         }
-
-//         const { fullName, username, phone } = req.body;
-
-//         const user = await UserModel.findById(userId);
-
-//         if (!user) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "User not found"
-//             });
-//         }
-
-//         if (fullName) user.fullName = fullName;
-//         if (username) user.username = username;
-//         if (phone) user.phone = phone;
-
-//         if (req.file) {
-//             if (user.profileImage) {
-//                 const oldImagePath = path.join(__dirname, "../../uploads/profiles", user.profileImage);
-//                 if (fs.existsSync(oldImagePath)) {
-//                     fs.unlinkSync(oldImagePath);
-//                 }
-//             }
-//             user.profileImage = req.file.filename;
-//         }
-
-//         await user.save();
-
-//         let profileImageUrl = null;
-//         if (user.profileImage) {
-//             profileImageUrl = `${BASE_URL}/uploads/profiles/${user.profileImage}`;
-//         }
-
-//         res.status(200).json({
-//             success: true,
-//             message: "Profile updated successfully",
-//             data: {
-//                 id: user._id,
-//                 fullName: user.fullName,
-//                 username: user.username,
-//                 email: user.email,
-//                 phone: user.phone,
-//                 profileImage: profileImageUrl,
-//                 role: user.role
-//             }
-//         });
-//     } catch (error: any) {
-//         res.status(500).json({
-//             success: false,
-//             message: error.message
-//         });
-//     }
-// };
-
 export const updateProfile = async (req: Request, res: Response) => {
     try {
-        // ✅ FIX: Always use the userId from the JWT token
-        // Mobile sends PUT /api/auth/profile (no ID in URL)
-        // So we just trust the token — user can only update themselves
+        // FIX: Always use the userId from the JWT token
+
         const userId = (req as any).userId;
 
         const { fullName, username, phone } = req.body;
@@ -215,7 +149,6 @@ export const updateProfile = async (req: Request, res: Response) => {
     }
 };
 
-// ✅ NEW: Request password reset
 export const sendResetPasswordEmail = async (req: Request, res: Response) => {
     try {
         const email = req.body.email;
@@ -232,7 +165,6 @@ export const sendResetPasswordEmail = async (req: Request, res: Response) => {
     }
 };
 
-// ✅ NEW: Reset password
 export const resetPassword = async (req: Request, res: Response) => {
     try {
         const token = req.params.token as string;
@@ -246,51 +178,6 @@ export const resetPassword = async (req: Request, res: Response) => {
         return res.status(error.statusCode ?? 500).json({
             success: false,
             message: error.message || "Internal Server Error"
-        });
-    }
-};
-
-// Simple direct password reset for mobile app (no email/token needed)
-export const resetPasswordDirect = async (req: Request, res: Response) => {
-    try {
-        const { email, newPassword } = req.body;
-
-        if (!email || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and new password are required"
-            });
-        }
-
-        if (newPassword.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters"
-            });
-        }
-
-        const user = await UserModel.findOne({ email });
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "No account found with this email"
-            });
-        }
-
-        const bcryptjs = await import('bcryptjs');
-        const hashedPassword = await bcryptjs.hash(newPassword, 10);
-        user.password = hashedPassword;
-        await user.save();
-
-        res.status(200).json({
-            success: true,
-            message: "Password reset successfully"
-        });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            message: error.message
         });
     }
 };

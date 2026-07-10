@@ -10,9 +10,13 @@ router.post("/register", authController.register);
 router.post("/login", authController.login);
 
 // Password reset routes
+// SECURITY FIX (CWE-640 / CWE-306): Removed the legacy "reset-password-direct" endpoint.
+// It accepted only { email, newPassword } with no authentication and no proof of email
+// ownership, allowing any unauthenticated attacker to take over any account. All password
+// resets now go through the token-based flow below (signed JWT emailed to the account,
+// 1-hour expiry, verified server-side before any password change is accepted).
 router.post("/request-password-reset", authController.sendResetPasswordEmail);
 router.post("/reset-password/:token", authController.resetPassword);
-router.post("/reset-password-direct", authController.resetPasswordDirect);
 
 // Protected routes
 router.get("/profile", authMiddleware, authController.getProfile);

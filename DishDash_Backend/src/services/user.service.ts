@@ -38,15 +38,45 @@ export const registerUser = async (data: RegisterInput) => {
     };
 };
 
+// SECURITY FIX (CWE-307): Account lockout, complementing IP-based rate limiting.
+// Rate limiting alone can be bypassed by an attacker rotating IPs; locking the
+// account itself after repeated failures closes that gap regardless of source IP.
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 export const loginUser = async (data: LoginInput) => {
     const user = await userRepo.getUserByEmail(data.email);
     if (!user) {
+        // Same generic message as a wrong password — avoids confirming which
+        // emails are registered (username enumeration).
         throw new HttpError(401, "Invalid email or password");
+    }
+
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+        const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
+        throw new HttpError(423, `Account locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`);
     }
 
     const isValid = await bcryptjs.compare(data.password, user.password);
     if (!isValid) {
+        user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+
+        if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
+            user.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+            user.failedLoginAttempts = 0;
+            await user.save();
+            throw new HttpError(423, "Account locked due to too many failed attempts. Try again in 15 minute(s).");
+        }
+
+        await user.save();
         throw new HttpError(401, "Invalid email or password");
+    }
+
+    // Successful login — clear any prior failure tracking.
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        user.failedLoginAttempts = 0;
+        user.lockedUntil = null;
+        await user.save();
     }
 
     const token = jwt.sign(

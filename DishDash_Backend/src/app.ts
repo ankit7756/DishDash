@@ -14,6 +14,7 @@ import adminRestaurantRoutes from "./routes/admin/restaurant.route";
 import adminFoodRoutes from "./routes/admin/food.route";
 import adminMiscRoutes from "./routes/admin/misc.route";
 import paymentRoutes from "./routes/payment.route";
+import { globalLimiter } from "./middleware/rateLimiter.middleware";
 
 const app: Application = express();
 
@@ -27,6 +28,9 @@ app.use(cors(corsOptions));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Baseline rate limiting across the whole API — blunts scripted abuse/scraping.
+// Specific sensitive endpoints (auth, OTP) layer stricter limiters on top of this.
+app.use(globalLimiter);
 
 // Public API Routes
 app.use('/api/auth', authRoutes);

@@ -1,15 +1,14 @@
 import express from "express";
 import {
-    getAllRestaurants,
-    getRestaurantById,
-    searchRestaurants,
-} from "../controllers/restaurant.controller";
+    sendPaymentOTP,
+    verifyPaymentOTP,
+} from "../controllers/payment.contoller";
+import { authMiddleware } from "../middleware/auth.middleware";
+import { sensitiveActionLimiter } from "../middleware/rateLimiter.middleware";
 
-// Restaurant routes
 const router = express.Router();
 
-router.get("/", getAllRestaurants);
-router.get("/search", searchRestaurants);
-router.get("/:id", getRestaurantById);
+router.post("/khalti/send-otp", authMiddleware, sensitiveActionLimiter, sendPaymentOTP);
+router.post("/khalti/verify-otp", authMiddleware, sensitiveActionLimiter, verifyPaymentOTP);
 
 export default router;

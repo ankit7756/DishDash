@@ -2,7 +2,13 @@ import { Request, Response } from "express";
 import { sendEmail } from "../config/email";
 
 // Store OTPs temporarily in memory (good enough for college project)
-const otpStore: Map<string, { otp: string; expiresAt: number }> = new Map();
+// SECURITY FIX (CWE-307: Improper Restriction of Excessive Authentication Attempts):
+// verifyPaymentOTP previously had no cap on how many guesses could be made against a
+// single 6-digit OTP within its 5-minute validity window, making it brute-forceable.
+// Each stored OTP now tracks a failed-attempt counter; after MAX_OTP_ATTEMPTS wrong
+// guesses the OTP is invalidated and the user must request a fresh one.
+const MAX_OTP_ATTEMPTS = 5;
+const otpStore: Map<string, { otp: string; expiresAt: number; attempts: number }> = new Map();
 
 // Generate 6 digit OTP
 const generateOTP = (): string => {
@@ -26,7 +32,7 @@ export const sendPaymentOTP = async (req: Request, res: Response) => {
         const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
         // Store OTP with userId as key
-        otpStore.set(userId, { otp, expiresAt });
+        otpStore.set(userId, { otp, expiresAt, attempts: 0 });
 
         // Send email
         const html = `
@@ -103,10 +109,20 @@ export const verifyPaymentOTP = async (req: Request, res: Response) => {
             });
         }
 
+        if (stored.attempts >= MAX_OTP_ATTEMPTS) {
+            otpStore.delete(userId);
+            return res.status(429).json({
+                success: false,
+                message: "Too many incorrect attempts. Please request a new OTP."
+            });
+        }
+
         if (stored.otp !== otp) {
+            stored.attempts += 1;
+            otpStore.set(userId, stored);
             return res.status(400).json({
                 success: false,
-                message: "Invalid OTP. Please try again."
+                message: `Invalid OTP. Please try again. (${MAX_OTP_ATTEMPTS - stored.attempts} attempt(s) remaining)`
             });
         }
 

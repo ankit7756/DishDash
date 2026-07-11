@@ -1,5 +1,7 @@
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
+import speakeasy from "speakeasy";
+import QRCode from "qrcode";
 import * as userRepo from "../repositories/user.repository";
 import { HttpError } from "../errors/http-error";
 import { RegisterInput, LoginInput } from "../types/user.type";
@@ -79,6 +81,24 @@ export const loginUser = async (data: LoginInput) => {
         await user.save();
     }
 
+    // SECURITY FEATURE (MFA / Zero-Trust): if the account has MFA enabled, a correct
+    // password alone is not enough to authenticate. Instead of the real session JWT,
+    // issue a short-lived "pending" token that only grants access to the MFA-verify
+    // endpoint — nothing else. The real session token is issued only after the TOTP
+    // code is also verified.
+    if (user.mfaEnabled) {
+        const mfaPendingToken = jwt.sign(
+            { userId: user._id, mfaPending: true },
+            JWT_SECRET,
+            { expiresIn: "5m" }
+        );
+        return {
+            message: "MFA verification required",
+            mfaRequired: true,
+            mfaPendingToken,
+        };
+    }
+
     const token = jwt.sign(
         { userId: user._id, email: user.email, role: user.role },
         JWT_SECRET,
@@ -92,11 +112,127 @@ export const loginUser = async (data: LoginInput) => {
             _id: user._id,
             fullName: user.fullName,
             username: user.username,
-            phone: user.phone,
             email: user.email,
             role: user.role
         }
     };
+};
+
+// ---------- MFA (TOTP) ----------
+
+// Step 1 of setup: generate a new secret and return a QR code for the user to scan
+// with an authenticator app. mfaEnabled stays false until confirmSetup succeeds —
+// this prevents a half-finished setup from silently locking a user out later.
+export const generateMfaSetup = async (userId: string) => {
+    const user = await userRepo.getUserById(userId);
+    if (!user) throw new HttpError(404, "User not found");
+
+    const secret = speakeasy.generateSecret({
+        name: `DishDash (${user.email})`,
+        length: 20,
+    });
+
+    if (!secret.otpauth_url) {
+        throw new HttpError(500, "Failed to generate MFA setup URL");
+    }
+
+    user.mfaSecret = secret.base32;
+    user.mfaEnabled = false; // not enabled until confirmed
+    await user.save();
+
+    const qrCodeDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    return { qrCodeDataUrl, secret: secret.base32 };
+};
+
+// Step 2 of setup: user submits a code from their authenticator app to prove the
+// setup actually worked before we turn MFA on for real.
+export const confirmMfaSetup = async (userId: string, token: string) => {
+    const user = await userRepo.getUserById(userId);
+    if (!user || !user.mfaSecret) {
+        throw new HttpError(400, "MFA setup has not been started for this account");
+    }
+
+    const verified = speakeasy.totp.verify({
+        secret: user.mfaSecret,
+        encoding: "base32",
+        token,
+        window: 1, // allow ±30s clock drift
+    });
+
+    if (!verified) {
+        throw new HttpError(400, "Invalid verification code");
+    }
+
+    user.mfaEnabled = true;
+    await user.save();
+
+    return { message: "MFA enabled successfully" };
+};
+
+// Step 2 of login: verify the TOTP code against the mfaPendingToken issued at login,
+// and only then issue the real session JWT.
+export const verifyMfaLogin = async (mfaPendingToken: string, token: string) => {
+    let decoded: any;
+    try {
+        decoded = jwt.verify(mfaPendingToken, JWT_SECRET);
+    } catch {
+        throw new HttpError(401, "Invalid or expired MFA session. Please log in again.");
+    }
+
+    if (!decoded.mfaPending) {
+        throw new HttpError(401, "Invalid MFA session token");
+    }
+
+    const user = await userRepo.getUserById(decoded.userId);
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+        throw new HttpError(400, "MFA is not enabled on this account");
+    }
+
+    const verified = speakeasy.totp.verify({
+        secret: user.mfaSecret,
+        encoding: "base32",
+        token,
+        window: 1,
+    });
+
+    if (!verified) {
+        throw new HttpError(401, "Invalid MFA code");
+    }
+
+    const sessionToken = jwt.sign(
+        { userId: user._id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+
+    return {
+        message: "Login successful",
+        token: sessionToken,
+        user: {
+            _id: user._id,
+            fullName: user.fullName,
+            username: user.username,
+            email: user.email,
+            role: user.role
+        }
+    };
+};
+
+// Disabling MFA requires the current password — prevents a hijacked session
+// (e.g. stolen JWT) from being used to silently strip MFA off the account.
+export const disableMfa = async (userId: string, password: string) => {
+    const user = await userRepo.getUserById(userId);
+    if (!user) throw new HttpError(404, "User not found");
+
+    const isValid = await bcryptjs.compare(password, user.password);
+    if (!isValid) throw new HttpError(401, "Incorrect password");
+
+    user.mfaEnabled = false;
+    user.mfaSecret = null;
+    await user.save();
+
+    return { message: "MFA disabled" };
 };
 
 export const sendResetPasswordEmail = async (email?: string) => {

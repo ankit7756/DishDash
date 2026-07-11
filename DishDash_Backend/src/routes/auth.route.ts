@@ -24,4 +24,10 @@ router.get("/profile", authMiddleware, authController.getProfile);
 // router.put("/:id", authMiddleware, uploadProfileImage, authController.updateProfile);
 router.put("/profile", authMiddleware, uploadProfileImage, authController.updateProfile);
 
+// MFA routes
+router.post("/mfa/setup", authMiddleware, authController.setupMfa);
+router.post("/mfa/confirm", authMiddleware, authController.confirmMfa);
+router.post("/mfa/verify", sensitiveActionLimiter, authController.verifyMfa); // public: uses mfaPendingToken instead of session
+router.post("/mfa/disable", authMiddleware, authController.disableMfa);
+
 export default router;

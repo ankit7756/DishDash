@@ -15,7 +15,10 @@ const userSchema = new mongoose.Schema({
     },
     // Account lockout tracking (brute-force protection)
     failedLoginAttempts: { type: Number, default: 0 },
-    lockedUntil: { type: Date, default: null }
+    lockedUntil: { type: Date, default: null },
+    // Multi-Factor Authentication (TOTP)
+    mfaSecret: { type: String, default: null },
+    mfaEnabled: { type: Boolean, default: false }
 }, { timestamps: true });
 
 export const UserModel = mongoose.model("User", userSchema);

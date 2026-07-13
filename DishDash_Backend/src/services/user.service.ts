@@ -8,6 +8,8 @@ import { HttpError } from "../errors/http-error";
 import { RegisterInput, LoginInput } from "../types/user.type";
 import { JWT_SECRET } from "../config";
 import { sendEmail } from "../config/email";
+import { verifyCaptcha } from "./captcha.service";
+import { OrderModel } from "../models/Order.model";
 
 const CLIENT_URL = process.env.CLIENT_URL as string;
 
@@ -28,6 +30,10 @@ const assertPasswordStrength = (password: string, inputs: string[] = []) => {
 };
 
 export const registerUser = async (data: RegisterInput) => {
+    // SECURITY FEATURE: CAPTCHA required on registration — always, since this
+    // is a classic bot-abuse target (mass fake account creation).
+    await verifyCaptcha(data.captchaToken);
+
     const existingUser = await userRepo.getUserByEmail(data.email);
     if (existingUser) {
         throw new HttpError(400, "Email already exists");
@@ -66,6 +72,7 @@ export const registerUser = async (data: RegisterInput) => {
 // account itself after repeated failures closes that gap regardless of source IP.
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const CAPTCHA_REQUIRED_AFTER_ATTEMPTS = 2;
 
 export const loginUser = async (data: LoginInput) => {
     const user = await userRepo.getUserByEmail(data.email);
@@ -78,6 +85,13 @@ export const loginUser = async (data: LoginInput) => {
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
         const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
         throw new HttpError(423, `Account locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`);
+    }
+
+    // SECURITY FEATURE: adaptive CAPTCHA — not required on every login (bad UX for
+    // legitimate users), but kicks in as an escalating friction layer once an
+    // account has 2+ recent failed attempts, before the harder 5-attempt lockout.
+    if ((user.failedLoginAttempts || 0) >= CAPTCHA_REQUIRED_AFTER_ATTEMPTS) {
+        await verifyCaptcha(data.captchaToken);
     }
 
     const isValid = await bcryptjs.compare(data.password, user.password);
@@ -257,6 +271,33 @@ export const verifyMfaLogin = async (mfaPendingToken: string, token: string) => 
     };
 };
 
+// SECURITY / PRIVACY FEATURE: data export, aligned with privacy-by-design
+// principles (data portability). Returns the user's own profile and order
+// history as JSON — deliberately excludes password hash, MFA secret, and
+// password history, since those are internal security artifacts, not data
+// the user "owns" in the export/portability sense.
+export const exportUserData = async (userId: string) => {
+    const user = await userRepo.getUserById(userId);
+    if (!user) throw new HttpError(404, "User not found");
+
+    const orders = await OrderModel.find({ userId }).sort({ orderDate: -1 });
+
+    return {
+        exportedAt: new Date().toISOString(),
+        profile: {
+            _id: user._id,
+            fullName: user.fullName,
+            username: user.username,
+            phone: user.phone,
+            email: user.email,
+            role: user.role,
+            mfaEnabled: user.mfaEnabled,
+            createdAt: (user as any).createdAt,
+        },
+        orders,
+    };
+};
+
 // Disabling MFA requires the current password — prevents a hijacked session
 // (e.g. stolen JWT) from being used to silently strip MFA off the account.
 export const disableMfa = async (userId: string, password: string) => {
@@ -273,14 +314,23 @@ export const disableMfa = async (userId: string, password: string) => {
     return { message: "MFA disabled" };
 };
 
-export const sendResetPasswordEmail = async (email?: string) => {
+export const sendResetPasswordEmail = async (email?: string, captchaToken?: string) => {
     if (!email) {
         throw new HttpError(400, "Email is required");
     }
 
+    // SECURITY FEATURE: CAPTCHA required — password reset requests are a classic
+    // bot-abuse target (mass email spam / enumeration probing).
+    await verifyCaptcha(captchaToken);
+
+    // SECURITY FIX (CWE-203: Observable Discrepancy / user enumeration):
+    // Previously threw 404 "User not found" for unregistered emails, which
+    // let an attacker enumerate valid accounts via this endpoint despite the
+    // controller's response message claiming to be non-revealing. Now silently
+    // no-ops for unknown emails so the response is identical either way.
     const user = await userRepo.getUserByEmail(email);
     if (!user) {
-        throw new HttpError(404, "User not found");
+        return;
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });

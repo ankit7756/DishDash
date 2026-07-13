@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { encrypt, decrypt } from "../utils/encryption";
 
 // order item sub-schema
 const orderItemSchema = new mongoose.Schema({
@@ -29,8 +30,20 @@ const orderSchema = new mongoose.Schema({
     subtotal: { type: Number, required: true },
     deliveryFee: { type: Number, required: true },
     totalAmount: { type: Number, required: true },
-    deliveryAddress: { type: String, required: true },
-    phone: { type: String, required: true },
+    // SECURITY FEATURE: field-level encryption at rest (AES-256-CBC) — see
+    // User.model.ts for the full rationale. Same transparent set/get pattern.
+    deliveryAddress: {
+        type: String,
+        required: true,
+        set: (value: string) => (value ? encrypt(value) : value),
+        get: (value: string) => (value ? decrypt(value) : value),
+    },
+    phone: {
+        type: String,
+        required: true,
+        set: (value: string) => (value ? encrypt(value) : value),
+        get: (value: string) => (value ? decrypt(value) : value),
+    },
     paymentMethod: {
         type: String,
         enum: ["Cash on Delivery", "eSewa", "Khalti"],
@@ -43,6 +56,10 @@ const orderSchema = new mongoose.Schema({
     },
     orderDate: { type: Date, default: Date.now },
     deliveryDate: { type: Date },
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    toJSON: { getters: true },
+    toObject: { getters: true },
+});
 
 export const OrderModel = mongoose.model("Order", orderSchema);

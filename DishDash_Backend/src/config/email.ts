@@ -23,7 +23,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
     const mailOptions = {
-        from: `Foodify <${EMAIL_USER}>`,
+        from: `DishDash <${EMAIL_USER}>`,
         to,
         subject,
         html,

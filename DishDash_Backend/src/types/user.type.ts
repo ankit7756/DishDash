@@ -19,12 +19,14 @@ export const RegisterSchema = z.object({
     phone: z.string().min(10, "Phone number must be at least 10 digits"),
     email: z.email({ message: "Invalid email format" }),
     password: passwordPolicy,
+    captchaToken: z.string().optional(),
 });
 
 // Login Schema
 export const LoginSchema = z.object({
     email: z.email({ message: "Invalid email format" }),
     password: z.string().min(1, "Password is required"),
+    captchaToken: z.string().optional(),
 });
 
 export const UpdateUserSchema = z.object({

@@ -34,4 +34,7 @@ router.post("/mfa/disable", authMiddleware, authController.disableMfa);
 router.post("/change-password", authMiddleware, authController.changePassword);
 router.post("/complete-password-change", sensitiveActionLimiter, authController.completeExpiredPasswordChange); // public: uses passwordChangePendingToken
 
+// Data export (privacy)
+router.get("/export-data", authMiddleware, authController.exportData);
+
 export default router;

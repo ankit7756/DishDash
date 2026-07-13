@@ -229,8 +229,8 @@ export const updateProfile = async (req: Request, res: Response) => {
 // ✅ NEW: Request password reset
 export const sendResetPasswordEmail = async (req: Request, res: Response) => {
     try {
-        const email = req.body.email;
-        await userService.sendResetPasswordEmail(email);
+        const { email, captchaToken } = req.body;
+        await userService.sendResetPasswordEmail(email, captchaToken);
         return res.status(200).json({
             success: true,
             message: "If the email is registered, a reset link has been sent."
@@ -332,6 +332,20 @@ export const disableMfa = async (req: Request, res: Response) => {
         return res.status(200).json({ success: true, ...data });
     } catch (error: any) {
         await logAudit({ req, userId: (req as any).userId, action: "MFA_DISABLED", outcome: "failure" });
+        return res.status(error.statusCode ?? 500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
+// ---------- Data Export (Privacy) ----------
+export const exportData = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).userId;
+        const data = await userService.exportUserData(userId);
+        return res.status(200).json({ success: true, ...data });
+    } catch (error: any) {
         return res.status(error.statusCode ?? 500).json({
             success: false,
             message: error.message || "Internal Server Error"

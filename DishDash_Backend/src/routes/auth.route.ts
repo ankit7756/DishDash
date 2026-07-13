@@ -30,4 +30,8 @@ router.post("/mfa/confirm", authMiddleware, authController.confirmMfa);
 router.post("/mfa/verify", sensitiveActionLimiter, authController.verifyMfa); // public: uses mfaPendingToken instead of session
 router.post("/mfa/disable", authMiddleware, authController.disableMfa);
 
+// Password policy routes
+router.post("/change-password", authMiddleware, authController.changePassword);
+router.post("/complete-password-change", sensitiveActionLimiter, authController.completeExpiredPasswordChange); // public: uses passwordChangePendingToken
+
 export default router;

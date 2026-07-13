@@ -21,7 +21,7 @@ describe('User Service Unit Tests', () => {
             username: 'johndoe',
             phone: '9800000001',
             email: 'john@example.com',
-            password: 'Password123!'
+            password: 'Zx9!qLmWpR7v' // meets length/complexity AND zxcvbn score >= 2
         };
 
         test('should register and return user without password field', async () => {

@@ -18,7 +18,10 @@ const userSchema = new mongoose.Schema({
     lockedUntil: { type: Date, default: null },
     // Multi-Factor Authentication (TOTP)
     mfaSecret: { type: String, default: null },
-    mfaEnabled: { type: Boolean, default: false }
+    mfaEnabled: { type: Boolean, default: false },
+    // Password policy: reuse prevention (last 5) and 90-day expiry
+    passwordHistory: { type: [String], default: [] },
+    passwordChangedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
 export const UserModel = mongoose.model("User", userSchema);

@@ -323,3 +323,46 @@ export const disableMfa = async (req: Request, res: Response) => {
         });
     }
 };
+
+// ---------- Password Policy ----------
+
+// Voluntary password change for an already-authenticated user.
+export const changePassword = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).userId;
+        const { oldPassword, newPassword } = req.body;
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "oldPassword and newPassword are required"
+            });
+        }
+        const data = await userService.changePassword(userId, oldPassword, newPassword);
+        return res.status(200).json({ success: true, ...data });
+    } catch (error: any) {
+        return res.status(error.statusCode ?? 500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};
+
+// Forced password change after 90-day expiry, using the pendingToken from login.
+export const completeExpiredPasswordChange = async (req: Request, res: Response) => {
+    try {
+        const { passwordChangePendingToken, newPassword } = req.body;
+        if (!passwordChangePendingToken || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "passwordChangePendingToken and newPassword are required"
+            });
+        }
+        const data = await userService.completeExpiredPasswordChange(passwordChangePendingToken, newPassword);
+        return res.status(200).json({ success: true, ...data });
+    } catch (error: any) {
+        return res.status(error.statusCode ?? 500).json({
+            success: false,
+            message: error.message || "Internal Server Error"
+        });
+    }
+};

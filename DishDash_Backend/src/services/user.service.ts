@@ -2,6 +2,7 @@ import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
+import zxcvbn from "zxcvbn";
 import * as userRepo from "../repositories/user.repository";
 import { HttpError } from "../errors/http-error";
 import { RegisterInput, LoginInput } from "../types/user.type";
@@ -10,11 +11,29 @@ import { sendEmail } from "../config/email";
 
 const CLIENT_URL = process.env.CLIENT_URL as string;
 
+// SECURITY FEATURE: Password policy constants.
+// zxcvbn score is 0 (worst) to 4 (best); 2 is the commonly recommended floor
+// (see Dropbox's zxcvbn documentation) — catches "complex-looking but weak"
+// passwords like "Password1!" that pass regex rules but are still guessable.
+const MIN_ZXCVBN_SCORE = 2;
+const PASSWORD_HISTORY_LIMIT = 5;
+const PASSWORD_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+const assertPasswordStrength = (password: string, inputs: string[] = []) => {
+    const result = zxcvbn(password, inputs);
+    if (result.score < MIN_ZXCVBN_SCORE) {
+        const suggestion = result.feedback.suggestions[0] || "Choose a less predictable password.";
+        throw new HttpError(400, `Password is too weak. ${suggestion}`);
+    }
+};
+
 export const registerUser = async (data: RegisterInput) => {
     const existingUser = await userRepo.getUserByEmail(data.email);
     if (existingUser) {
         throw new HttpError(400, "Email already exists");
     }
+
+    assertPasswordStrength(data.password, [data.email, data.username, data.fullName]);
 
     const hashedPassword = await bcryptjs.hash(data.password, 10);
 
@@ -24,7 +43,9 @@ export const registerUser = async (data: RegisterInput) => {
         phone: data.phone,
         email: data.email,
         password: hashedPassword,
-        role: "user"
+        role: "user",
+        passwordHistory: [hashedPassword],
+        passwordChangedAt: new Date(),
     });
 
     return {
@@ -79,6 +100,23 @@ export const loginUser = async (data: LoginInput) => {
         user.failedLoginAttempts = 0;
         user.lockedUntil = null;
         await user.save();
+    }
+
+    // SECURITY FEATURE: 90-day password expiry. A correct-but-expired password
+    // does not grant a full session — the user must set a new password first,
+    // using the same short-lived pending-token pattern as the MFA flow below.
+    const passwordAge = Date.now() - (user.passwordChangedAt?.getTime() ?? 0);
+    if (passwordAge > PASSWORD_EXPIRY_MS) {
+        const passwordChangePendingToken = jwt.sign(
+            { userId: user._id, passwordChangePending: true },
+            JWT_SECRET,
+            { expiresIn: "10m" }
+        );
+        return {
+            message: "Password expired",
+            passwordChangeRequired: true,
+            passwordChangePendingToken,
+        };
     }
 
     // SECURITY FEATURE (MFA / Zero-Trust): if the account has MFA enabled, a correct
@@ -280,11 +318,84 @@ export const resetPassword = async (token?: string, newPassword?: string) => {
             throw new HttpError(404, "User not found");
         }
 
-        const hashedPassword = await bcryptjs.hash(newPassword, 10);
-        await userRepo.updateUser(userId, { password: hashedPassword });
+        await applyNewPassword(user, newPassword);
 
         return user;
     } catch (error) {
+        if (error instanceof HttpError) throw error;
         throw new HttpError(400, "Invalid or expired token");
     }
+};
+
+// Shared by resetPassword, changePassword, and completeExpiredPasswordChange:
+// enforces strength (zxcvbn), blocks reuse of the last PASSWORD_HISTORY_LIMIT
+// passwords, then hashes, stores, and updates passwordChangedAt.
+const applyNewPassword = async (user: any, newPassword: string) => {
+    assertPasswordStrength(newPassword, [user.email, user.username, user.fullName]);
+
+    const history: string[] = user.passwordHistory || [];
+    for (const oldHash of history) {
+        const matches = await bcryptjs.compare(newPassword, oldHash);
+        if (matches) {
+            throw new HttpError(400, `You cannot reuse any of your last ${PASSWORD_HISTORY_LIMIT} passwords.`);
+        }
+    }
+
+    const hashedPassword = await bcryptjs.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.passwordHistory = [hashedPassword, ...history].slice(0, PASSWORD_HISTORY_LIMIT);
+    user.passwordChangedAt = new Date();
+    await user.save();
+};
+
+// Voluntary password change (user is already fully logged in, knows their
+// current password). Requires re-entering the current password as proof
+// of intent — prevents a hijacked/left-open session from silently changing it.
+export const changePassword = async (userId: string, oldPassword: string, newPassword: string) => {
+    const user = await userRepo.getUserById(userId);
+    if (!user) throw new HttpError(404, "User not found");
+
+    const isValid = await bcryptjs.compare(oldPassword, user.password);
+    if (!isValid) throw new HttpError(401, "Current password is incorrect");
+
+    await applyNewPassword(user, newPassword);
+    return { message: "Password changed successfully" };
+};
+
+// Forced change after a 90-day expiry, using the pending token issued by
+// loginUser instead of a full session (mirrors the MFA pending-token pattern).
+export const completeExpiredPasswordChange = async (passwordChangePendingToken: string, newPassword: string) => {
+    let decoded: any;
+    try {
+        decoded = jwt.verify(passwordChangePendingToken, JWT_SECRET);
+    } catch {
+        throw new HttpError(401, "Invalid or expired session. Please log in again.");
+    }
+
+    if (!decoded.passwordChangePending) {
+        throw new HttpError(401, "Invalid password-change session token");
+    }
+
+    const user = await userRepo.getUserById(decoded.userId);
+    if (!user) throw new HttpError(404, "User not found");
+
+    await applyNewPassword(user, newPassword);
+
+    const token = jwt.sign(
+        { userId: user._id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+
+    return {
+        message: "Password updated. Login successful.",
+        token,
+        user: {
+            _id: user._id,
+            fullName: user.fullName,
+            username: user.username,
+            email: user.email,
+            role: user.role
+        }
+    };
 };

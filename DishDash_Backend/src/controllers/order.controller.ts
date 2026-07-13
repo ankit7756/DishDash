@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { OrderModel } from "../models/Order.model";
 import { FoodModel } from "../models/Food.model";
 import { RestaurantModel } from "../models/Restaurant.model";
+import { logAudit } from "../services/audit.service";
 
 // SECURITY FIX (CWE-807: Reliance on Untrusted Inputs in a Security Decision):
 // The client previously sent subtotal, deliveryFee, totalAmount, and even each item's
@@ -84,6 +85,13 @@ export const createOrder = async (req: Request, res: Response) => {
             status: "pending",
         });
 
+        await logAudit({
+            req,
+            userId,
+            action: "ORDER_CREATED",
+            targetResource: String(order._id),
+            outcome: "success",
+        });
         res.status(201).json({ success: true, message: "Order placed successfully", data: order });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -130,6 +138,13 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
             { new: true }
         );
         if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+        await logAudit({
+            req,
+            userId: (req as any).userId,
+            action: "ORDER_STATUS_CHANGED",
+            targetResource: String(order._id),
+            outcome: "success",
+        });
         res.status(200).json({ success: true, message: "Order status updated", data: order });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

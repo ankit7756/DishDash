@@ -3,6 +3,7 @@ import { RegisterSchema, LoginSchema } from "../types/user.type";
 import * as userService from "../services/user.service";
 import { UserModel } from "../models/User.model";
 import { BASE_URL } from "../config";
+import { logAudit } from "../services/audit.service";
 import path from "path";
 import fs from "fs";
 
@@ -19,8 +20,10 @@ export const register = async (req: Request, res: Response) => {
 
     try {
         const data = await userService.registerUser(result.data);
+        await logAudit({ req, userEmail: result.data.email, action: "REGISTER", outcome: "success" });
         res.status(201).json({ success: true, ...data });
     } catch (error: any) {
+        await logAudit({ req, userEmail: result.data.email, action: "REGISTER", outcome: "failure" });
         res.status(error.statusCode || 500).json({
             success: false,
             message: error.message || "Server error",
@@ -40,9 +43,17 @@ export const login = async (req: Request, res: Response) => {
     }
 
     try {
-        const data = await userService.loginUser(result.data);
+        const data: any = await userService.loginUser(result.data);
+        const action = data.mfaRequired
+            ? "LOGIN_MFA_PENDING"
+            : data.passwordChangeRequired
+                ? "LOGIN_PASSWORD_EXPIRED"
+                : "LOGIN_SUCCESS";
+        await logAudit({ req, userEmail: result.data.email, action, outcome: "success" });
         res.json({ success: true, ...data });
     } catch (error: any) {
+        const action = error.statusCode === 423 ? "LOGIN_LOCKED" : "LOGIN_FAILED";
+        await logAudit({ req, userEmail: result.data.email, action, outcome: "failure" });
         res.status(error.statusCode || 500).json({
             success: false,
             message: error.message || "Server error",
@@ -276,8 +287,10 @@ export const confirmMfa = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Verification code is required" });
         }
         const data = await userService.confirmMfaSetup(userId, token);
+        await logAudit({ req, userId, action: "MFA_ENABLED", outcome: "success" });
         return res.status(200).json({ success: true, ...data });
     } catch (error: any) {
+        await logAudit({ req, userId: (req as any).userId, action: "MFA_ENABLED", outcome: "failure" });
         return res.status(error.statusCode ?? 500).json({
             success: false,
             message: error.message || "Internal Server Error"
@@ -315,8 +328,10 @@ export const disableMfa = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Password is required" });
         }
         const data = await userService.disableMfa(userId, password);
+        await logAudit({ req, userId, action: "MFA_DISABLED", outcome: "success" });
         return res.status(200).json({ success: true, ...data });
     } catch (error: any) {
+        await logAudit({ req, userId: (req as any).userId, action: "MFA_DISABLED", outcome: "failure" });
         return res.status(error.statusCode ?? 500).json({
             success: false,
             message: error.message || "Internal Server Error"
@@ -338,8 +353,10 @@ export const changePassword = async (req: Request, res: Response) => {
             });
         }
         const data = await userService.changePassword(userId, oldPassword, newPassword);
+        await logAudit({ req, userId, action: "PASSWORD_CHANGED", outcome: "success" });
         return res.status(200).json({ success: true, ...data });
     } catch (error: any) {
+        await logAudit({ req, userId: (req as any).userId, action: "PASSWORD_CHANGED", outcome: "failure" });
         return res.status(error.statusCode ?? 500).json({
             success: false,
             message: error.message || "Internal Server Error"

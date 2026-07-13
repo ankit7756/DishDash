@@ -13,6 +13,7 @@ import adminUserRoutes from "./routes/admin/user.route";
 import adminRestaurantRoutes from "./routes/admin/restaurant.route";
 import adminFoodRoutes from "./routes/admin/food.route";
 import adminMiscRoutes from "./routes/admin/misc.route";
+import { adminActivityLogger } from "./middleware/auditLogger.middleware";
 import paymentRoutes from "./routes/payment.route";
 import { globalLimiter } from "./middleware/rateLimiter.middleware";
 
@@ -41,10 +42,10 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/reviews', reviewRoutes);
 
 // Admin API Routes
-app.use('/api/admin/users', adminUserRoutes);
-app.use('/api/admin/restaurants', adminRestaurantRoutes);
-app.use('/api/admin/foods', adminFoodRoutes);
-app.use('/api/admin', adminMiscRoutes);
+app.use('/api/admin/users', adminActivityLogger, adminUserRoutes);
+app.use('/api/admin/restaurants', adminActivityLogger, adminRestaurantRoutes);
+app.use('/api/admin/foods', adminActivityLogger, adminFoodRoutes);
+app.use('/api/admin', adminActivityLogger, adminMiscRoutes);
 
 app.get('/', (req: Request, res: Response) => {
     return res.status(200).json({ success: true, message: "Foodify API is running!" });

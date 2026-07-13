@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAdminStats, adminGetAllOrders, adminUpdateOrderStatus, adminGetAllReviews } from "../../controllers/admin/misc.controller";
+import { getAdminStats, adminGetAllOrders, adminUpdateOrderStatus, adminGetAllReviews, getAuditLogs } from "../../controllers/admin/misc.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { adminMiddleware } from "../../middleware/admin.middleware";
 
@@ -12,5 +12,6 @@ router.get("/stats", getAdminStats);
 router.get("/orders", adminGetAllOrders);
 router.put("/orders/:id/status", adminUpdateOrderStatus);
 router.get("/reviews", adminGetAllReviews);
+router.get("/audit-logs", getAuditLogs);
 
 export default router;

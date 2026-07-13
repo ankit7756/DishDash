@@ -5,8 +5,39 @@ import { UserModel } from "../../models/User.model";
 import { RestaurantModel } from "../../models/Restaurant.model";
 import { FoodModel } from "../../models/Food.model";
 import { BASE_URL } from "../../config";
+import { logAudit } from "../../services/audit.service";
+import { AuditLogModel } from "../../models/AuditLog.model";
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+// ── Audit Logs ────────────────────────────────────────────────────────────────
+export const getAuditLogs = async (req: Request, res: Response) => {
+    try {
+        const { page = "1", size = "50", action, outcome, userId } = req.query as any;
+        const pageNum = parseInt(page);
+        const pageSize = parseInt(size);
+
+        const query: any = {};
+        if (action) query.action = action;
+        if (outcome) query.outcome = outcome;
+        if (userId) query.userId = userId;
+
+        const [logs, total] = await Promise.all([
+            AuditLogModel.find(query)
+                .populate("userId", "fullName email")
+                .sort({ createdAt: -1 })
+                .skip((pageNum - 1) * pageSize)
+                .limit(pageSize),
+            AuditLogModel.countDocuments(query),
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            data: logs,
+            pagination: { page: pageNum, size: pageSize, totalItems: total, totalPages: Math.ceil(total / pageSize) },
+        });
+    } catch (error: any) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
 export const getAdminStats = async (req: Request, res: Response) => {
     try {
         const now = new Date();
@@ -118,6 +149,13 @@ export const adminUpdateOrderStatus = async (req: Request, res: Response) => {
         ).populate("userId", "fullName email");
 
         if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+        await logAudit({
+            req,
+            userId: (req as any).userId,
+            action: "ADMIN_ORDER_STATUS_CHANGED",
+            targetResource: String(order._id),
+            outcome: "success",
+        });
         return res.status(200).json({ success: true, message: "Status updated", data: order });
     } catch (error: any) {
         return res.status(500).json({ success: false, message: error.message });

@@ -1,6 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
+import cookieParser from 'cookie-parser';
 import { HttpError } from './errors/http-error';
 import reviewRoutes from "./routes/review.route";
 
@@ -29,6 +30,7 @@ app.use(cors(corsOptions));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 // Baseline rate limiting across the whole API — blunts scripted abuse/scraping.
 // Specific sensitive endpoints (auth, OTP) layer stricter limiters on top of this.
 app.use(globalLimiter);

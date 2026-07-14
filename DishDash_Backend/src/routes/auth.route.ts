@@ -37,4 +37,8 @@ router.post("/complete-password-change", sensitiveActionLimiter, authController.
 // Data export (privacy)
 router.get("/export-data", authMiddleware, authController.exportData);
 
+// Session management
+router.post("/refresh", authController.refreshSession); // public: uses refreshToken cookie
+router.post("/logout", authController.logout); // public: uses refreshToken cookie
+
 export default router;

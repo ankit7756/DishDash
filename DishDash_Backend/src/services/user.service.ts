@@ -10,6 +10,7 @@ import { JWT_SECRET } from "../config";
 import { sendEmail } from "../config/email";
 import { verifyCaptcha } from "./captcha.service";
 import { OrderModel } from "../models/Order.model";
+import { issueAccessToken, issueRefreshToken } from "./session.service";
 
 const CLIENT_URL = process.env.CLIENT_URL as string;
 
@@ -74,7 +75,7 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 const CAPTCHA_REQUIRED_AFTER_ATTEMPTS = 2;
 
-export const loginUser = async (data: LoginInput) => {
+export const loginUser = async (data: LoginInput, userAgent?: string) => {
     const user = await userRepo.getUserByEmail(data.email);
     if (!user) {
         // Same generic message as a wrong password — avoids confirming which
@@ -151,15 +152,13 @@ export const loginUser = async (data: LoginInput) => {
         };
     }
 
-    const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-    );
+    const token = issueAccessToken(user);
+    const refreshToken = await issueRefreshToken(String(user._id), userAgent);
 
     return {
         message: "Login successful",
         token,
+        refreshToken,
         user: {
             _id: user._id,
             fullName: user.fullName,
@@ -224,7 +223,7 @@ export const confirmMfaSetup = async (userId: string, token: string) => {
 
 // Step 2 of login: verify the TOTP code against the mfaPendingToken issued at login,
 // and only then issue the real session JWT.
-export const verifyMfaLogin = async (mfaPendingToken: string, token: string) => {
+export const verifyMfaLogin = async (mfaPendingToken: string, token: string, userAgent?: string) => {
     let decoded: any;
     try {
         decoded = jwt.verify(mfaPendingToken, JWT_SECRET);
@@ -252,15 +251,13 @@ export const verifyMfaLogin = async (mfaPendingToken: string, token: string) => 
         throw new HttpError(401, "Invalid MFA code");
     }
 
-    const sessionToken = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-    );
+    const sessionToken = issueAccessToken(user);
+    const refreshToken = await issueRefreshToken(String(user._id), userAgent);
 
     return {
         message: "Login successful",
         token: sessionToken,
+        refreshToken,
         user: {
             _id: user._id,
             fullName: user.fullName,
@@ -414,7 +411,7 @@ export const changePassword = async (userId: string, oldPassword: string, newPas
 
 // Forced change after a 90-day expiry, using the pending token issued by
 // loginUser instead of a full session (mirrors the MFA pending-token pattern).
-export const completeExpiredPasswordChange = async (passwordChangePendingToken: string, newPassword: string) => {
+export const completeExpiredPasswordChange = async (passwordChangePendingToken: string, newPassword: string, userAgent?: string) => {
     let decoded: any;
     try {
         decoded = jwt.verify(passwordChangePendingToken, JWT_SECRET);
@@ -431,15 +428,13 @@ export const completeExpiredPasswordChange = async (passwordChangePendingToken: 
 
     await applyNewPassword(user, newPassword);
 
-    const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-    );
+    const token = issueAccessToken(user);
+    const refreshToken = await issueRefreshToken(String(user._id), userAgent);
 
     return {
         message: "Password updated. Login successful.",
         token,
+        refreshToken,
         user: {
             _id: user._id,
             fullName: user.fullName,

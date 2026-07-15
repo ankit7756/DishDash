@@ -1,143 +1,124 @@
 import { Request, Response } from "express";
-import { sendEmail } from "../config/email";
+import { OrderModel } from "../models/Order.model";
+import { UserModel } from "../models/User.model";
+import { initiateKhaltiPayment, lookupKhaltiPayment } from "../services/khalti.service";
+import { logAudit } from "../services/audit.service";
 
-// Store OTPs temporarily in memory (good enough for college project)
-// SECURITY FIX (CWE-307: Improper Restriction of Excessive Authentication Attempts):
-// verifyPaymentOTP previously had no cap on how many guesses could be made against a
-// single 6-digit OTP within its 5-minute validity window, making it brute-forceable.
-// Each stored OTP now tracks a failed-attempt counter; after MAX_OTP_ATTEMPTS wrong
-// guesses the OTP is invalidated and the user must request a fresh one.
-const MAX_OTP_ATTEMPTS = 5;
-const otpStore: Map<string, { otp: string; expiresAt: number; attempts: number }> = new Map();
-
-// Generate 6 digit OTP
-const generateOTP = (): string => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// Send OTP to email
-export const sendPaymentOTP = async (req: Request, res: Response) => {
+// SECURITY / TRANSACTION FEATURE: replaces the previous email-OTP "payment"
+// mockup with a real trusted third-party gateway (Khalti). Step 1: open a
+// Khalti payment session for an order the requesting user actually owns.
+export const initiateKhaltiPaymentController = async (req: Request, res: Response) => {
     try {
-        const { phone, amount, restaurantName } = req.body;
         const userId = (req as any).userId;
-
-        if (!phone || !amount) {
-            return res.status(400).json({
-                success: false,
-                message: "Phone and amount are required"
-            });
+        const { orderId } = req.body;
+        if (!orderId) {
+            return res.status(400).json({ success: false, message: "orderId is required" });
         }
 
-        const otp = generateOTP();
-        const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+        // SECURITY: ownership check — a user can only pay for their own order,
+        // not any order ID they happen to guess (anti-IDOR, same pattern used
+        // throughout the rest of this app).
+        const order = await OrderModel.findOne({ _id: orderId, userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
 
-        // Store OTP with userId as key
-        otpStore.set(userId, { otp, expiresAt, attempts: 0 });
+        if (order.paymentMethod !== "Khalti") {
+            return res.status(400).json({ success: false, message: "This order is not set up for Khalti payment" });
+        }
 
-        // Send email
-        const html = `
-            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
-                <div style="background: #5C2D91; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
-                    <h1 style="color: white; margin: 0; font-size: 28px;">Khalti</h1>
-                    <p style="color: #e0c9f5; margin: 4px 0 0 0; font-size: 14px;">Digital Wallet</p>
-                </div>
-                <div style="background: white; padding: 32px; border-radius: 0 0 12px 12px; border: 1px solid #eee;">
-                    <h2 style="color: #333; margin-top: 0;">Payment Verification</h2>
-                    <p style="color: #555;">You are making a payment of:</p>
-                    <div style="background: #f9f4ff; border: 1px solid #d4b8f0; border-radius: 8px; padding: 16px; margin: 16px 0; text-align: center;">
-                        <p style="margin: 0; color: #5C2D91; font-size: 28px; font-weight: bold;">Rs. ${amount}</p>
-                        <p style="margin: 4px 0 0 0; color: #888; font-size: 14px;">To ${restaurantName} via Foodify</p>
-                    </div>
-                    <p style="color: #555;">Your OTP code is:</p>
-                    <div style="background: #5C2D91; border-radius: 8px; padding: 20px; text-align: center; margin: 16px 0;">
-                        <h1 style="color: white; margin: 0; letter-spacing: 12px; font-size: 36px;">${otp}</h1>
-                    </div>
-                    <p style="color: #888; font-size: 13px;">⏱️ This OTP expires in <strong>5 minutes</strong>.</p>
-                    <p style="color: #888; font-size: 13px;">🔒 Never share this OTP with anyone.</p>
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-                    <p style="color: #bbb; font-size: 12px; text-align: center;">Foodify Payment System • Powered by Khalti</p>
-                </div>
-            </div>
-        `;
+        if (order.paymentStatus === "completed") {
+            return res.status(400).json({ success: false, message: "This order has already been paid" });
+        }
 
-        await sendEmail(
-            process.env.EMAIL_USER || "",
-            `Rs. ${amount} Payment OTP - Khalti`,
-            html
-        );
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
 
-        res.status(200).json({
-            success: true,
-            message: "OTP sent to your registered email"
+        const { pidx, paymentUrl } = await initiateKhaltiPayment({
+            amountInRupees: order.totalAmount,
+            orderId: String(order._id),
+            customerName: user.fullName,
+            customerEmail: user.email,
+            customerPhone: order.phone, // already decrypted transparently via the Order model getter
         });
 
+        order.khaltiPidx = pidx;
+        order.paymentStatus = "pending";
+        await order.save();
+
+        await logAudit({
+            req, userId, action: "PAYMENT_INITIATED", targetResource: String(order._id), outcome: "success",
+        });
+
+        return res.status(200).json({ success: true, pidx, paymentUrl });
     } catch (error: any) {
-        res.status(500).json({
+        return res.status(error.statusCode ?? 500).json({
             success: false,
-            message: error.message || "Failed to send OTP"
+            message: error.message || "Failed to initiate payment"
         });
     }
 };
 
-// Verify OTP
-export const verifyPaymentOTP = async (req: Request, res: Response) => {
+// Step 2: confirm the REAL payment status via a server-to-server lookup —
+// never trust a client-reported "success" (e.g. a forged return_url query
+// param). This is the actual source of truth for whether money moved.
+export const verifyKhaltiPaymentController = async (req: Request, res: Response) => {
     try {
-        const { otp } = req.body;
         const userId = (req as any).userId;
-
-        if (!otp) {
-            return res.status(400).json({
-                success: false,
-                message: "OTP is required"
-            });
+        const { orderId } = req.body;
+        if (!orderId) {
+            return res.status(400).json({ success: false, message: "orderId is required" });
         }
 
-        const stored = otpStore.get(userId);
-
-        if (!stored) {
-            return res.status(400).json({
-                success: false,
-                message: "No OTP found. Please request a new one."
-            });
+        const order = await OrderModel.findOne({ _id: orderId, userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        if (Date.now() > stored.expiresAt) {
-            otpStore.delete(userId);
-            return res.status(400).json({
-                success: false,
-                message: "OTP has expired. Please request a new one."
-            });
+        if (!order.khaltiPidx) {
+            return res.status(400).json({ success: false, message: "No payment has been initiated for this order" });
         }
 
-        if (stored.attempts >= MAX_OTP_ATTEMPTS) {
-            otpStore.delete(userId);
-            return res.status(429).json({
-                success: false,
-                message: "Too many incorrect attempts. Please request a new OTP."
-            });
+        const { status, transactionId } = await lookupKhaltiPayment(order.khaltiPidx);
+
+        switch (status) {
+            case "Completed":
+                order.paymentStatus = "completed";
+                if (order.status === "pending") order.status = "preparing"; // unlock fulfillment now payment is confirmed
+                break;
+            case "Refunded":
+            case "Partially Refunded":
+                order.paymentStatus = "refunded";
+                break;
+            case "Expired":
+            case "User canceled":
+                order.paymentStatus = "failed";
+                break;
+            case "Pending":
+            default:
+                order.paymentStatus = "pending";
+                break;
         }
+        await order.save();
 
-        if (stored.otp !== otp) {
-            stored.attempts += 1;
-            otpStore.set(userId, stored);
-            return res.status(400).json({
-                success: false,
-                message: `Invalid OTP. Please try again. (${MAX_OTP_ATTEMPTS - stored.attempts} attempt(s) remaining)`
-            });
-        }
-
-        // OTP correct — clear it
-        otpStore.delete(userId);
-
-        res.status(200).json({
-            success: true,
-            message: "Payment verified successfully"
+        await logAudit({
+            req, userId, action: "PAYMENT_VERIFIED", targetResource: String(order._id),
+            outcome: order.paymentStatus === "completed" ? "success" : "failure",
         });
 
+        return res.status(200).json({
+            success: true,
+            paymentStatus: order.paymentStatus,
+            khaltiStatus: status,
+            transactionId,
+            order,
+        });
     } catch (error: any) {
-        res.status(500).json({
+        return res.status(error.statusCode ?? 500).json({
             success: false,
-            message: error.message || "Verification failed"
+            message: error.message || "Failed to verify payment"
         });
     }
 };

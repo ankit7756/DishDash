@@ -1,14 +1,14 @@
 import express from "express";
 import {
-    sendPaymentOTP,
-    verifyPaymentOTP,
+    initiateKhaltiPaymentController,
+    verifyKhaltiPaymentController,
 } from "../controllers/payment.contoller";
 import { authMiddleware } from "../middleware/auth.middleware";
 import { sensitiveActionLimiter } from "../middleware/rateLimiter.middleware";
 
 const router = express.Router();
 
-router.post("/khalti/send-otp", authMiddleware, sensitiveActionLimiter, sendPaymentOTP);
-router.post("/khalti/verify-otp", authMiddleware, sensitiveActionLimiter, verifyPaymentOTP);
+router.post("/khalti/initiate", authMiddleware, sensitiveActionLimiter, initiateKhaltiPaymentController);
+router.post("/khalti/verify", authMiddleware, sensitiveActionLimiter, verifyKhaltiPaymentController);
 
 export default router;

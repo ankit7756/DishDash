@@ -28,3 +28,12 @@ export const RECAPTCHA_SECRET_KEY =
 // keep it out of version control, since anyone with this key can decrypt
 // stored phone numbers/addresses.
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "dev-only-encryption-key-change-me";
+
+// SECURITY / TRANSACTION FEATURE: Khalti ePayment integration (real trusted
+// third-party payment gateway — Stripe/PayPal both restrict account creation
+// from Nepal, so Khalti is the regionally appropriate equivalent, and matches
+// the "Khalti" payment method already used in this app's design). Sandbox
+// base URL per Khalti's official docs; the secret key MUST be the test key
+// from test-admin.khalti.com, never a real production key, for this project.
+export const KHALTI_SECRET_KEY = process.env.KHALTI_SECRET_KEY || "";
+export const KHALTI_BASE_URL = process.env.KHALTI_BASE_URL || "https://dev.khalti.com/api/v2";

@@ -46,8 +46,18 @@ const orderSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ["Cash on Delivery", "eSewa", "Khalti"],
+        enum: ["Cash on Delivery", "Khalti"],
         default: "Cash on Delivery"
+    },
+    // SECURITY / TRANSACTION FEATURE: real Khalti ePayment tracking. pidx is
+    // Khalti's own transaction reference; paymentStatus is deliberately
+    // separate from the fulfillment `status` field below — payment state and
+    // delivery state are different concerns and shouldn't be conflated.
+    khaltiPidx: { type: String, default: null },
+    paymentStatus: {
+        type: String,
+        enum: ["unpaid", "pending", "completed", "failed", "refunded"],
+        default: "unpaid",
     },
     status: {
         type: String,

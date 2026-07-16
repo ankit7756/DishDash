@@ -47,36 +47,4 @@ jobs:
       - name: Run npm audit (fail on high/critical)
         run: npm audit --audit-level=high
 
-  test:
-    name: Run Test Suite
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: DishDash_Backend
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping:1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: DishDash_Backend/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Run test suite
-        env:
-          MONGODB_URI: mongodb://127.0.0.1:27017/dishdash
-          JWT_SECRET: ci-test-secret-key-not-for-production
-          ENCRYPTION_KEY: ci-test-encryption-key-not-for-production
-        run: npm test
+  

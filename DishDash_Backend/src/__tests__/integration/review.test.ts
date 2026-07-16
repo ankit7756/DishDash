@@ -51,7 +51,7 @@ describe('Review Integration Tests', () => {
             items: [{ foodId: '000000000000000000000001', name: 'Pizza', price: 350, quantity: 1, image: 'p.jpg' }],
             subtotal: 350, deliveryFee: 50, totalAmount: 400,
             deliveryAddress: 'Lalitpur', phone: '9800004001',
-            paymentMethod: 'Cash on Delivery',
+            paymentMethod: 'Cash on Delivery' as const,
         };
         const d = await OrderModel.create({ ...base, status: 'delivered' });
         deliveredOrderId = d._id.toString();

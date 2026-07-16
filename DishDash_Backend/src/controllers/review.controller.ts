@@ -56,9 +56,20 @@ export const getUserReviews = async (req: Request, res: Response) => {
 };
 
 // Get review for a specific order
+// SECURITY FIX (CWE-639: IDOR) found during final RBAC sweep — this endpoint
+// only required authentication, not ownership, so any logged-in user could
+// fetch another user's review by guessing/enumerating an orderId. Now scoped
+// to the requesting user's own orders, same pattern used elsewhere in this app.
 export const getReviewByOrder = async (req: Request, res: Response) => {
     try {
+        const userId = (req as any).userId;
         const { orderId } = req.params;
+
+        const order = await OrderModel.findOne({ _id: orderId, userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
         const review = await ReviewModel.findOne({ orderId });
         res.status(200).json({ success: true, data: review || null });
     } catch (error: any) {

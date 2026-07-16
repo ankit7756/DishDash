@@ -59,6 +59,16 @@ export class AdminUserService {
         if (!user) {
             throw new HttpError(404, "User not found");
         }
+
+        // SECURITY FIX: this previously passed updateData straight through to
+        // userRepo.updateUser without hashing — if an admin's request body
+        // included a password field, it would be stored in PLAINTEXT (unlike
+        // createUser just above, which correctly hashes it). Found during the
+        // final RBAC/security sweep.
+        if (updateData.password) {
+            updateData.password = await bcryptjs.hash(updateData.password, 10);
+        }
+
         const updatedUser = await userRepo.updateUser(id, updateData);
         return updatedUser;
     }

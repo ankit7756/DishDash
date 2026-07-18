@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { RestaurantModel } from "../models/Restaurant.model";
+import { escapeRegex, toSafeString } from "../utils/sanitize";
 
 export const getAllRestaurants = async (req: Request, res: Response) => {
     try {
@@ -38,20 +39,27 @@ export const getRestaurantById = async (req: Request, res: Response) => {
 
 export const searchRestaurants = async (req: Request, res: Response) => {
     try {
-        const { query } = req.query;
-
-        if (!query) {
+        // SECURITY FIX: `query` was previously passed straight into a MongoDB
+        // $regex with zero validation or escaping — a NoSQL operator-injection
+        // and ReDoS (regex denial-of-service) risk on a public, unauthenticated
+        // endpoint. toSafeString rejects anything that isn't a plain string
+        // (blocking the ?query[$ne]=x bracket-notation trick), and escapeRegex
+        // neutralizes regex metacharacters so a crafted pattern can't cause
+        // catastrophic backtracking.
+        const rawQuery = toSafeString(req.query.query);
+        if (!rawQuery) {
             return res.status(400).json({ message: "Search query is required" });
         }
+        const safeQuery = escapeRegex(rawQuery);
 
         const restaurants = await RestaurantModel.find({
             $or: [
-                { name: { $regex: query, $options: "i" } },
-                { categories: { $regex: query, $options: "i" } },
-                { description: { $regex: query, $options: "i" } },
+                { name: { $regex: safeQuery, $options: "i" } },
+                { categories: { $regex: safeQuery, $options: "i" } },
+                { description: { $regex: safeQuery, $options: "i" } },
             ],
             isOpen: true,
-        } as any).sort({ rating: -1 });
+        }).sort({ rating: -1 });
 
         res.status(200).json({
             success: true,

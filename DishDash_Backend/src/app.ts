@@ -2,8 +2,10 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { HttpError } from './errors/http-error';
 import reviewRoutes from "./routes/review.route";
+import { sanitizeBody } from "./middleware/sanitize.middleware";
 
 // Import routes
 import authRoutes from "./routes/auth.route";
@@ -27,10 +29,19 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+// SECURITY FEATURE: Helmet sets a range of protective HTTP headers in one call
+// — Content-Security-Policy, X-Frame-Options (clickjacking), X-Content-Type-
+// Options (MIME sniffing), and others. This is the "close the easy gaps"
+// layer, standard practice for any Express API.
+app.use(helmet());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// SECURITY FEATURE: strips MongoDB operator keys ($ne, $gt, etc.) and HTML/
+// script content from every request body — see utils/sanitize.ts for the
+// full NoSQL-injection and stored-XSS rationale.
+app.use(sanitizeBody);
 // Baseline rate limiting across the whole API — blunts scripted abuse/scraping.
 // Specific sensitive endpoints (auth, OTP) layer stricter limiters on top of this.
 app.use(globalLimiter);

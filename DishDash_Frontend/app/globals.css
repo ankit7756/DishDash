@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+:root {
+  /* Warm, appetite-driven palette — orange primary, warm off-white base,
+     charcoal text (never pure black — softer, more premium feel) */
+  --color-primary: #f4650a;
+  --color-primary-dark: #d9520a;
+  --color-primary-light: #ff8534;
+  --color-primary-50: #fff3ea;
+  --color-primary-100: #ffe2cc;
+
+  --color-secondary: #1f2937;
+  --color-accent: #16a34a;
+  --color-accent-light: #dcfce7;
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+
+  --color-background: #fffaf5;
+  --color-surface: #ffffff;
+  --color-border: #f0e4d8;
+  --color-text: #2b2320;
+  --color-text-muted: #7a6f66;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 3px rgba(43, 35, 32, 0.06), 0 1px 2px rgba(43, 35, 32, 0.04);
+  --shadow-card-hover: 0 8px 24px rgba(244, 101, 10, 0.12), 0 2px 6px rgba(43, 35, 32, 0.06);
+}
+
+/* Dark mode kept intentionally muted/secondary — this app's identity is the
+   light warm theme; dark mode exists as a toggle convenience, not the star. */
+.dark {
+  --color-background: #1a1613;
+  --color-surface: #251f1b;
+  --color-border: #3a322c;
+  --color-text: #f5efe9;
+  --color-text-muted: #ab9d92;
+  --color-primary-50: #2e2119;
+  --color-primary-100: #3a2a1f;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary-light: var(--color-primary-light);
+  --color-primary-50: var(--color-primary-50);
+  --color-primary-100: var(--color-primary-100);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-accent-light: var(--color-accent-light);
+  --color-danger: var(--color-danger);
+  --color-danger-light: var(--color-danger-light);
+  --color-warning: var(--color-warning);
+  --color-warning-light: var(--color-warning-light);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --font-sans: var(--font-poppins);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.container {
+  @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+/* Reusable card surface — used everywhere instead of repeating the same
+   bg/border/shadow/rounded utility chain on every component */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card-interactive:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  @apply bg-primary text-white font-semibold rounded-full px-6 py-2.5 transition-colors hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-transparent border-2 border-primary text-primary font-semibold rounded-full px-6 py-2.5 transition-colors hover:bg-primary-50 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.input-field {
+  @apply w-full rounded-xl border px-4 py-2.5 bg-surface text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors;
+  border-color: var(--color-border);
+}
+
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium;
+}

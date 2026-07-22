@@ -1,24 +1,29 @@
 import api from "./axios";
 import { API } from "./endpoints";
 
+// SECURITY: matches the backend's price-tampering fix — only foodId and
+// quantity are ever sent. Price, subtotal, and totalAmount are calculated
+// server-side from the real Food/Restaurant records and cannot be
+// influenced by the client (see order.controller.ts's createOrder).
+export interface CreateOrderItem {
+    foodId: string;
+    quantity: number;
+}
+
+export interface CreateOrderPayload {
+    restaurantId: string;
+    items: CreateOrderItem[];
+    deliveryAddress: string;
+    phone: string;
+    paymentMethod: "Cash on Delivery" | "Khalti";
+}
+
 export interface OrderItem {
     foodId: string;
     name: string;
     price: number;
     quantity: number;
     image: string;
-}
-
-export interface CreateOrderPayload {
-    restaurantId: string;
-    restaurantName: string;
-    items: OrderItem[];
-    subtotal: number;
-    deliveryFee: number;
-    totalAmount: number;
-    deliveryAddress: string;
-    phone: string;
-    paymentMethod: "Cash on Delivery" | "Khalti";
 }
 
 export interface Order {
@@ -32,6 +37,8 @@ export interface Order {
     deliveryAddress: string;
     phone: string;
     paymentMethod: string;
+    paymentStatus: "unpaid" | "pending" | "completed" | "failed" | "refunded";
+    khaltiPidx?: string;
     status: "pending" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
     orderDate: string;
     deliveryDate?: string;
@@ -86,18 +93,21 @@ export const cancelOrder = async (id: string): Promise<Order> => {
     return res.data.data;
 };
 
-// Payment
-export const sendKhaltiOTP = async (payload: {
-    phone: string;
-    amount: string;
-    restaurantName: string;
-}): Promise<{ success: boolean; message: string }> => {
-    const res = await api.post(API.PAYMENT.KHALTI_SEND_OTP, payload);
+// Payment — replaces the old fake email-OTP flow entirely with the real
+// Khalti ePayment integration (see khalti.service.ts on the backend).
+export const initiateKhaltiPayment = async (orderId: string): Promise<{ success: boolean; pidx: string; paymentUrl: string }> => {
+    const res = await api.post(API.PAYMENT.KHALTI_INITIATE, { orderId });
     return res.data;
 };
 
-export const verifyKhaltiOTP = async (otp: string): Promise<{ success: boolean; message: string }> => {
-    const res = await api.post(API.PAYMENT.KHALTI_VERIFY_OTP, { otp });
+export const verifyKhaltiPayment = async (orderId: string): Promise<{
+    success: boolean;
+    paymentStatus: Order["paymentStatus"];
+    khaltiStatus: string;
+    transactionId: string | null;
+    order: Order;
+}> => {
+    const res = await api.post(API.PAYMENT.KHALTI_VERIFY, { orderId });
     return res.data;
 };
 

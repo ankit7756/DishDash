@@ -1,117 +1,56 @@
 import Link from "next/link";
-import Image from "next/image";
-import { Instagram, Facebook, Twitter, Mail, Phone, MapPin } from "lucide-react";
+import { UtensilsCrossed, Facebook, Instagram, Twitter } from "lucide-react";
 
 export default function Footer() {
     return (
-        <footer className="bg-background border-t border-border/60">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-
-                    {/* Brand */}
-                    <div className="md:col-span-1 space-y-4">
-                        <Link href="/" className="flex items-center gap-2.5 group">
-                            <div className="relative h-9 w-9 rounded-xl overflow-hidden shadow-sm">
-                                <Image src="/images/foodify_logo.png" alt="Foodify" fill className="object-cover" />
-                                <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-pink-600 flex items-center justify-center text-white font-bold text-lg">
-                                    F
-                                </div>
-                            </div>
-                            <span className="text-lg font-bold bg-gradient-to-r from-orange-500 to-pink-600 bg-clip-text text-transparent">
-                                Foodify
-                            </span>
-                        </Link>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                            Delicious food from your favorite restaurants, delivered fast to your doorstep.
-                        </p>
-                        <div className="flex items-center gap-3">
-                            <a href="#" className="p-2 rounded-lg text-muted-foreground hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all">
-                                <Instagram className="h-4 w-4" />
-                            </a>
-                            <a href="#" className="p-2 rounded-lg text-muted-foreground hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all">
-                                <Facebook className="h-4 w-4" />
-                            </a>
-                            <a href="#" className="p-2 rounded-lg text-muted-foreground hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all">
-                                <Twitter className="h-4 w-4" />
-                            </a>
+        <footer className="bg-secondary text-white mt-auto">
+            <div className="container py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div>
+                    <Link href="/" className="flex items-center gap-2 mb-3">
+                        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                            <UtensilsCrossed className="h-4 w-4 text-white" />
                         </div>
-                    </div>
-
-                    {/* Quick Links */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-foreground">Quick Links</h4>
-                        <ul className="space-y-2.5">
-                            {[
-                                { href: "/", label: "Home" },
-                                { href: "/about", label: "About" },
-                                { href: "/login", label: "Log in" },
-                                { href: "/register", label: "Sign up" },
-                            ].map((link) => (
-                                <li key={link.href}>
-                                    <Link
-                                        href={link.href}
-                                        className="text-sm text-muted-foreground hover:text-orange-500 transition-colors"
-                                    >
-                                        {link.label}
-                                    </Link>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    {/* Company */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-foreground">Company</h4>
-                        <ul className="space-y-2.5">
-                            {[
-                                { href: "/about", label: "About Us" },
-                                { href: "#", label: "Careers" },
-                                { href: "#", label: "Privacy Policy" },
-                                { href: "#", label: "Terms of Service" },
-                            ].map((link) => (
-                                <li key={link.label}>
-                                    <Link
-                                        href={link.href}
-                                        className="text-sm text-muted-foreground hover:text-orange-500 transition-colors"
-                                    >
-                                        {link.label}
-                                    </Link>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    {/* Contact */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-foreground">Contact</h4>
-                        <ul className="space-y-3">
-                            <li className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                                <Mail className="h-4 w-4 mt-0.5 text-orange-500 flex-shrink-0" />
-                                <span>hello@foodify.com</span>
-                            </li>
-                            <li className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                                <Phone className="h-4 w-4 mt-0.5 text-orange-500 flex-shrink-0" />
-                                <span>+977 9800000000</span>
-                            </li>
-                            <li className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                                <MapPin className="h-4 w-4 mt-0.5 text-orange-500 flex-shrink-0" />
-                                <span>Kathmandu, Nepal</span>
-                            </li>
-                        </ul>
-                    </div>
+                        <span className="text-lg font-bold">Dish<span className="text-primary-light">Dash</span></span>
+                    </Link>
+                    <p className="text-sm text-white/60">Great food, delivered fast to your doorstep.</p>
                 </div>
 
-                {/* Bottom bar */}
-                <div className="mt-10 pt-6 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <p className="text-xs text-muted-foreground">
-                        © 2025 Foodify. All rights reserved.
-                    </p>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span>Made with</span>
-                        <span className="text-red-500">♥</span>
-                        <span>for food lovers</span>
+                <div>
+                    <h4 className="font-semibold mb-3 text-sm uppercase tracking-wide text-white/80">Company</h4>
+                    <ul className="space-y-2 text-sm text-white/60">
+                        <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
+                        <li><Link href="/user/restaurants" className="hover:text-white transition-colors">Restaurants</Link></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 className="font-semibold mb-3 text-sm uppercase tracking-wide text-white/80">Account</h4>
+                    <ul className="space-y-2 text-sm text-white/60">
+                        <li><Link href="/login" className="hover:text-white transition-colors">Log in</Link></li>
+                        <li><Link href="/register" className="hover:text-white transition-colors">Sign up</Link></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 className="font-semibold mb-3 text-sm uppercase tracking-wide text-white/80">Follow Us</h4>
+                    <div className="flex gap-3">
+                        <a href="#" className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-primary transition-colors">
+                            <Facebook className="h-4 w-4" />
+                        </a>
+                        <a href="#" className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-primary transition-colors">
+                            <Instagram className="h-4 w-4" />
+                        </a>
+                        <a href="#" className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-primary transition-colors">
+                            <Twitter className="h-4 w-4" />
+                        </a>
                     </div>
                 </div>
+            </div>
+
+            <div className="border-t border-white/10 py-5">
+                <p className="text-center text-xs text-white/50">
+                    © {new Date().getFullYear()} DishDash. Built for Softwarica College coursework.
+                </p>
             </div>
         </footer>
     );
